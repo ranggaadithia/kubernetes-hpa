@@ -1,0 +1,33 @@
+prometheus:
+  url: http://prometheus-server.monitoring.svc.cluster.local
+  port: 80
+
+rules:
+  # Jangan gunakan rules bawaan (cpu/memory standar) agar tidak bentrok
+  default: false
+  
+  # Definisi Custom Metrics
+  custom:
+    # 1. Pencarian Series (Metric Mentah)
+    - seriesQuery: 'nginx_http_requests_total'
+      
+      # 2. Mapping Resource (SANGAT PENTING)
+      # Bagian ini memberitahu adapter: "Label 'namespace' di Prometheus itu 
+      # mewakili resource 'namespace' di Kubernetes".
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+          service: {resource: "service"}
+      
+      # 3. Penamaan Metric Baru
+      # Mengubah "nginx_http_requests_total" menjadi "http_requests_per_second"
+      name:
+        matches: "^(.*)_total"
+        as: "${1}_per_second"
+      
+      # 4. Query PromQL Dinamis
+      # <<.Series>> diganti jadi 'nginx_http_requests_total'
+      # <<.LabelMatchers>> diganti otomatis oleh HPA (misal: namespace="skripsi-hpa")
+      # <<.GroupBy>> diganti otomatis (misal: by namespace, pod)
+      metricsQuery: 'sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)'
